@@ -73,6 +73,7 @@ def sympy_evaluate(condition: str, points: Union[List[Tuple[str, float]], ItemsV
     _log.debug(f"Sympy debug points: {points} -- {cleaned_points}")
     equation = parse_expr(cleaned_condition)
     return_value = equation.subs(cleaned_points)
+    _log.debug(f"Sympy debug return value for condition: {condition} -- {return_value}")
     if return_value.is_infinite:
         return 0.0
     elif isinstance(return_value, Boolean):
