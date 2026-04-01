@@ -58,7 +58,6 @@ class ControlCluster(object):
         self.devices = {}
         self.device_topics = set()
         for device_name, device_config in cluster_config.items():
-            _log.debug(f'@@@@@@ CREATING MANAGER FOR {device_name} (IN CONTROL_CLUSTER) WITH ACTUATOR {actuator}')
             control_manager = ControlManager(device_name, device_config, logging_topic, parent,
                                              device_actuator=actuator)
             self.devices[device_name, actuator] = control_manager
@@ -185,8 +184,6 @@ class Controls(object):
             settings = [settings]
         conditional_settings = []
         for setting in settings:
-            _log.debug(
-                f'@@@@@@ IN process conditional_settings for {setting}, passing device_actuator: {device_actuator}')
             conditional = ControlSetting.make_setting(
                 logging_topic=logging_topic, agent=agent,
                 controls_object=self, default_device=default_device,
@@ -292,7 +289,6 @@ class Controls(object):
 class ControlManager(object):
     def __init__(self, name, device_config, logging_topic, agent, default_device="",
                  device_actuator='platform.actuator'):
-        _log.debug(f'@@@@@@ FOR {name}, DEVICE_CONFIG IS: {device_config} AND ACTUATOR IS: {device_actuator}')
         self.name = name
         self.device_topics = set()
         self.controls = {}
@@ -475,7 +471,6 @@ class ControlSetting(object):
 
     @abc.abstractmethod
     def _actuate(self, release=False, trigger=False, **kwargs):
-        _log.debug(f'@@@@@ ACTUATOR IN BASE SETTING _ACTUATE IS: {self.device_actuator}')
         # Implementations may just call super if this is sufficient, or may override this.
         target_value = self.revert_value if release else self.control_value
         publish_point = 'Release' if release else 'Actuate'
@@ -614,7 +609,6 @@ class RampControlSetting(ControlSetting):
         self.destination_value = destination_value
         self.increment_time = increment_time
         self.increment_value = increment_value
-        _log.debug(f'######## IN RAMP INIT, CONTROL_VALUE IS: {self.control_value}')
         self.greenlet = None
 
     def get_control_info(self):
@@ -631,7 +625,6 @@ class RampControlSetting(ControlSetting):
         super(RampControlSetting, self)._determine_control_value()
 
     def _actuate(self, release=False, trigger=False):
-        _log.debug(f'@@@@@ ACTUATOR IN RAMP CONTROLS _ACTUATE IS: {self.device_actuator}')
         target_value = self.revert_value if release else self.control_value
         publish_point = 'Release' if release else 'Actuate'
         try:
