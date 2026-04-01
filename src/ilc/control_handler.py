@@ -27,6 +27,7 @@ import logging
 import gevent
 
 from importlib.metadata import distribution, PackageNotFoundError
+
 try:
     distribution('volttron-core')
     from volttron.client.logs import setup_logging
@@ -57,7 +58,8 @@ class ControlCluster(object):
         self.devices = {}
         self.device_topics = set()
         for device_name, device_config in cluster_config.items():
-            control_manager = ControlManager(device_name, device_config, logging_topic, parent, actuator)
+            control_manager = ControlManager(device_name, device_config, logging_topic, parent,
+                                             device_actuator=actuator)
             self.devices[device_name, actuator] = control_manager
             self.device_topics |= control_manager.device_topics
 
@@ -117,7 +119,7 @@ class DeviceStatus(object):
         self.device_topic_map, self.device_topics = create_device_topic_map(device_status_args, default_device)
 
         _log.debug("Device topic map: {}".format(self.device_topic_map))
-        
+
         # self.device_status_args = device_status_args
         self.condition = parse_sympy(condition)
         self.expr = self.condition
@@ -318,7 +320,8 @@ class ControlManager(object):
         self.controls[device_id].reset_control_status()
 
     def get_device_status(self, state):
-        return [command for command, control in self.controls.items() if (state in control.device_status and control.device_status[state].command_status)]
+        return [command for command, control in self.controls.items() if
+                (state in control.device_status and control.device_status[state].command_status)]
 
     def get_control_topics(self):
         pass
@@ -438,7 +441,7 @@ class ControlSetting(object):
             result = self.agent.vip.rpc.call(self.device_actuator, "revert_point", "ilc", self.point).get(timeout=30)
             _log.debug("Reverted point: {} - Result: {}".format(self.point, result))
         else:
-            self._actuate(release=True, trigger=trigger)
+            self._actuate(release=True)
 
     # @abc.abstractmethod
     # def _release(self, release=False):
@@ -467,7 +470,7 @@ class ControlSetting(object):
             self.control_value = min(self.maximum, self.control_value)
 
     @abc.abstractmethod
-    def _actuate(self, release=False, **kwargs):
+    def _actuate(self, release=False, trigger=False, **kwargs):
         # Implementations may just call super if this is sufficient, or may override this.
         target_value = self.revert_value if release else self.control_value
         publish_point = 'Release' if release else 'Actuate'
@@ -480,7 +483,8 @@ class ControlSetting(object):
             self.agent.publish_record(topic, message)
             if release and self.finalize_release_with_revert:
                 # Release with revert_point to cede control.
-                result = self.agent.vip.rpc.call(self.device_actuator, "revert_point", "ilc", self.point).get(timeout=30)
+                result = self.agent.vip.rpc.call(self.device_actuator, "revert_point", "ilc", self.point).get(
+                    timeout=30)
                 _log.debug("Reverted point: {} - Result: {}".format(self.point, result))
         except (Exception, gevent.Timeout) as e:
             _log.warning(f'Exception encountered during {publish_point}:')
@@ -587,7 +591,7 @@ class OffsetControlSetting(ControlSetting):
 
     def get_control_info(self):
         control_info = super(OffsetControlSetting, self).get_control_info()
-        control_info.update({ 'control_method': 'offset', 'offset': self.offset})
+        control_info.update({'control_method': 'offset', 'offset': self.offset})
         return control_info
 
     def _determine_control_value(self):
@@ -605,7 +609,6 @@ class RampControlSetting(ControlSetting):
         self.destination_value = destination_value
         self.increment_time = increment_time
         self.increment_value = increment_value
-        _log.debug(f'######## IN RAMP INIT, CONTROL_VALUE IS: {self.control_value}')
         self.greenlet = None
 
     def get_control_info(self):
@@ -637,6 +640,7 @@ class RampControlSetting(ControlSetting):
                        f" to TARGET_VALUE: {target_value}, CONTROL_VALUE IS: {self.control_value},"
                        f" INCREMENT_VALUE: {self.increment_value}. LAST_LOOP_VALUE WAS: {last_loop_value}")
             sign = 1 if start_value >= target_value else -1
+
             def ramp():
                 final = None
                 try:
@@ -655,21 +659,25 @@ class RampControlSetting(ControlSetting):
                     _log.warning(ex)
                 finally:
                     return final
+
             self.greenlet = gevent.spawn(ramp)
         except (Exception, gevent.Timeout) as e:
             _log.warning(f'##### Exception encountered in Ramp {publish_point}:')
             _log.warning(e)
 
     def _ramping_loop(self, publish_point, steps, sign, start_value):
-        _log.debug(f"######## IN RAMPING LOOP FOR {self.point}, received: publish_point: {publish_point}, steps: {steps}, sign: {sign},"
-                   f" start_value: {start_value}")
-        _log.debug(f"##### IN RAMPING LOOP FOR {self.point}, SIGN IS: {sign}, self.increment_value is: {self.increment_value}")
+        _log.debug(
+            f"######## IN RAMPING LOOP FOR {self.point}, received: publish_point: {publish_point}, steps: {steps}, sign: {sign},"
+            f" start_value: {start_value}")
+        _log.debug(
+            f"##### IN RAMPING LOOP FOR {self.point}, SIGN IS: {sign}, self.increment_value is: {self.increment_value}")
         current_value = start_value
         try:
             for _ in range(steps):
                 previous_value = current_value
                 current_value -= sign * self.increment_value
-                _log.debug(f"#### IN RAMPING LOOP FOR {self.point}, CURRENT_VALUE is: {current_value}, PREVIOUS_VALUE: {previous_value}")
+                _log.debug(
+                    f"#### IN RAMPING LOOP FOR {self.point}, CURRENT_VALUE is: {current_value}, PREVIOUS_VALUE: {previous_value}")
                 self.agent.vip.rpc.call(self.device_actuator, "set_point", "ilc_agent", self.control_point_topic,
                                         current_value).get(timeout=30)
                 prefix = self.agent.update_base_topic.split("/")[0]
