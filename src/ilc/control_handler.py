@@ -30,7 +30,6 @@ from importlib.metadata import distribution, PackageNotFoundError
 
 try:
     distribution('volttron-core')
-    from volttron.client.logs import setup_logging
     from volttron.client.messaging import headers as headers_mod
     from volttron.client.vip.agent import Agent
     from volttron.utils import format_timestamp, get_aware_utc_now
@@ -38,12 +37,11 @@ try:
 except PackageNotFoundError:
     from volttron.platform.vip.agent import Agent
     from volttron.platform.messaging import headers as headers_mod
-    from volttron.platform.agent.utils import format_timestamp, get_aware_utc_now, setup_logging
+    from volttron.platform.agent.utils import format_timestamp, get_aware_utc_now
     from volttron.platform.jsonrpc import RemoteError
 
 from ilc.utils import parse_sympy, sympy_evaluate, create_device_topic_map, fix_up_point_name
 
-setup_logging()
 _log = logging.getLogger(__name__)
 
 

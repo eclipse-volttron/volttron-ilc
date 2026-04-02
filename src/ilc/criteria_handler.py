@@ -32,17 +32,15 @@ from sympy.core import numbers
 from importlib.metadata import distribution, PackageNotFoundError
 try:
     distribution('volttron-core')
-    from volttron.client.logs import setup_logging
     from volttron.client.messaging import headers as headers_mod
     from volttron.utils import get_aware_utc_now, format_timestamp
 except PackageNotFoundError:
     from volttron.platform.messaging import headers as headers_mod
-    from volttron.platform.agent.utils import format_timestamp, get_aware_utc_now, setup_logging
+    from volttron.platform.agent.utils import format_timestamp, get_aware_utc_now
 
 from ilc.ilc_matrices import (build_score, input_matrix)
 from ilc.utils import sympy_evaluate, create_device_topic_map, fix_up_point_name
 
-setup_logging()
 _log = logging.getLogger(__name__)
 
 criterion_registry = {}

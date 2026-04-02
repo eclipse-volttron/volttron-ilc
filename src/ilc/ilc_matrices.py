@@ -29,18 +29,7 @@ import operator
 from collections import defaultdict
 from functools import reduce
 
-from importlib.metadata import distribution, PackageNotFoundError
-try:
-    distribution('volttron-core')
-    from volttron.client.logs import setup_logging
-except PackageNotFoundError:
-    from volttron.platform.agent.utils import setup_logging
-
-setup_logging()
 _log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s   %(levelname)-8s %(message)s',
-                    datefmt='%m-%d-%y %H:%M:%S')
 
 
 def extract_criteria(filename):
