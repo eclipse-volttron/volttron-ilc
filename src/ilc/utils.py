@@ -82,7 +82,7 @@ def sympy_evaluate(condition: str, points: Union[List[Tuple[str, float]], ItemsV
         return float(return_value)
 
 
-def parse_sympy(data: List[str]) -> str:
+def parse_sympy(data: List[str]|str) -> str:
     """
     Creates conditional from list of conditional components.
 
