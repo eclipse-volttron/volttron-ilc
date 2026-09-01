@@ -90,7 +90,7 @@ from ilc.utils import sympy_evaluate
 # ---------------------------------------------------------------------------
 # Module-level setup
 # ---------------------------------------------------------------------------
-__version__ = "3.0"
+__version__ = "3.0.1"
 
 setup_logging()
 _log = logging.getLogger(__name__)
@@ -485,7 +485,7 @@ class ILCAgent(Agent):
                 self.saved_config.update(contents)
 
     @RPC.export
-    def update_configurations(self, data: Dict[str, Any]) -> bool:
+    def update_configurations(self, data: Dict[str, Any], force_demand_update: bool=False) -> bool:
         """
         Update ILC configuration objects via RPC.
 
@@ -499,6 +499,12 @@ class ILCAgent(Agent):
         if config is None:
             _log.warning("RPC update_configurations: 'config' key missing")
             return False
+
+        if force_demand_update:
+            demand_limit = config.get("demand_limit")
+            self.demand_limit = demand_limit if isinstance(demand_limit, (float, int)) else None
+            _log.debug(f"Force demand limit update: {demand_limit}")
+            return
 
         for name, payload in data.items():
             self.vip.config.set(name, payload)
@@ -1130,8 +1136,6 @@ class ILCAgent(Agent):
         start_time = time.time()
         _log.info("Data received for %s", topic)
 
-        self._sync_criteria_status()
-
         now = parse_timestamp_string(header[headers_mod.TIMESTAMP])
         data_topics, _meta_topics = self._breakout_all_publish(topic, message)
 
@@ -1222,6 +1226,7 @@ class ILCAgent(Agent):
         :param message: Message payload.
         :returns: ``None``
         """
+        self._sync_criteria_status()
         self.sim_time += 1
 
         if self.kill_signal_received:
@@ -1461,11 +1466,12 @@ class ILCAgent(Agent):
 
             est_curtailed += control_setting.control_load
             control_manager.increment_control(device_id)
-
+            _log.debug(f"Estimated load: {est_curtailed} -- Needed load: {need_curtailed}")
             if self._is_new_device(device_name, device_id):
                 self.devices.add(control_setting)
 
             if est_curtailed >= need_curtailed:
+                _log.debug(f"Breaking out of actuation loop: {est_curtailed} >= {need_curtailed}")
                 break
 
         self.lock = False

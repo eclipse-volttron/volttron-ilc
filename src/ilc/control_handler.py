@@ -299,7 +299,7 @@ class ControlSetting(abc.ABC):
         self.device_topics.add(self.point_device)
 
         # --- Mutable control state ---
-        self.control_load: float = 0.0
+        self.control_load: float = self.load
         self.control_time = None
         self.control_value: Optional[float] = None
         self.revert_value: Optional[float] = None
@@ -353,7 +353,7 @@ class ControlSetting(abc.ABC):
 
         :raises: This method does not raise any exceptions.
         """
-        self.control_load = 0.0
+        self.control_load = self.load
         self.control_time = None
         self.control_value = None
         self.revert_value = None
@@ -366,7 +366,8 @@ class ControlSetting(abc.ABC):
         :returns:
             ``True`` if an error prevented actuation, ``False`` on success.
         """
-        self._evaluate_load_equation()
+        if isinstance(self.load, dict):
+            self._evaluate_load_equation()
 
         if not self._fetch_revert_value():
             return True  # error flag
@@ -385,9 +386,11 @@ class ControlSetting(abc.ABC):
             rather than a normal shed expiration.
         """
         if self.revert_value is None:
-            result = self.agent.vip.rpc.call(
-                self.device_actuator, "revert_point", self.point
-            ).get(timeout=RPC_TIMEOUT)
+            path, point = self.point.rsplit("/", 1)
+            result = self.agent.vip.rpc.call(self.device_actuator,
+                                             "revert_point",
+                                             path,
+                                             point).get(timeout=RPC_TIMEOUT)
             _log.debug("Reverted point: %s — Result: %s", self.point, result)
         else:
             self._actuate(release=True, trigger=trigger)
@@ -421,13 +424,12 @@ class ControlSetting(abc.ABC):
         action_label = "Release" if release else "Actuate"
 
         try:
-            self.agent.vip.rpc.call(
-                self.device_actuator,
-                "set_point",
-                self.control_point_topic,
-                target_value,
-            ).get(timeout=RPC_TIMEOUT)
-
+            path, point = self.control_point_topic.rsplit("/", 1)
+            self.agent.vip.rpc.call(self.device_actuator,
+                                    "set_point",
+                                    path,
+                                    point,
+                                    target_value).get(timeout=RPC_TIMEOUT)
             prefix = self.agent.update_base_topic.split("/")[0]
             topic = "/".join([prefix, self.control_point_topic, action_label])
             message = {
@@ -437,11 +439,11 @@ class ControlSetting(abc.ABC):
             self.agent.publish_record(topic, message)
 
             if release and self.finalize_release_with_revert:
-                result = self.agent.vip.rpc.call(
-                    self.device_actuator,
-                    "revert_point",
-                    self.point,
-                ).get(timeout=RPC_TIMEOUT)
+                path, point = self.point.rsplit("/", 1)
+                result = self.agent.vip.rpc.call(self.device_actuator,
+                                                 "revert_point",
+                                                 path,
+                                                 point).get(timeout=RPC_TIMEOUT)
                 _log.debug("Reverted point: %s — Result: %s", self.point, result)
 
         except (Exception, gevent.Timeout) as exc:
@@ -576,18 +578,17 @@ class ControlSetting(abc.ABC):
         :raises: Does not propagate exceptions but safely handles and logs specific
                  errors encountered during remote communication or equation evaluation.
         """
-        if not isinstance(self.load, dict):
-            return
-
         load_equation = self.load["load_equation"]
         load_point_values: List[Tuple[str, Any]] = []
 
         for load_arg in self.load["load_equation_args"]:
-            point_to_get = self.agent.base_rpc_path(path=load_arg[1])
+            path = self.agent.base_rpc_path(path="")
+            point_to_get = load_arg[1]
             try:
-                value = self.agent.vip.rpc.call(
-                    self.device_actuator, "get_point", point_to_get
-                ).get(timeout=RPC_TIMEOUT)
+                value = self.agent.vip.rpc.call(self.device_actuator,
+                                                "get_point",
+                                                path,
+                                                point_to_get).get(timeout=30)
             except (RemoteError, gevent.Timeout) as exc:
                 _log.warning(
                     "Failed to get point for load calculation %s: %s",
@@ -617,9 +618,11 @@ class ControlSetting(abc.ABC):
         if self.revert_value is not None:
             return True
         try:
-            self.revert_value = self.agent.vip.rpc.call(
-                self.device_actuator, "get_point", self.control_point_topic
-            ).get(timeout=RPC_TIMEOUT)
+            path, point = self.control_point_topic.rsplit("/", 1)
+            self.revert_value = self.agent.vip.rpc.call(self.device_actuator,
+                                                        "get_point",
+                                                        path,
+                                                        point).get(timeout=RPC_TIMEOUT)
             return True
         except (RemoteError, gevent.Timeout) as exc:
             _log.warning(
@@ -708,10 +711,12 @@ class EquationControlSetting(ControlSetting):
         """
         equation_point_values: List[Tuple[str, Any]] = []
         for eq_arg in self.equation_args:
-            point_path = self.agent.base_rpc_path(path=eq_arg[1])
-            value = self.agent.vip.rpc.call(
-                self.device_actuator, "get_point", point_path
-            ).get(timeout=RPC_TIMEOUT)
+            path = self.agent.base_rpc_path(path="")
+            point_get = eq_arg[1]
+            value = self.agent.vip.rpc.call(self.device_actuator,
+                                            "get_point",
+                                            path,
+                                            point_get).get(timeout=RPC_TIMEOUT)
             equation_point_values.append((eq_arg[0], value))
         self.control_value = sympy_evaluate(
             self.control_value_formula, equation_point_values
@@ -833,9 +838,11 @@ class RampControlSetting(ControlSetting):
 
         try:
             last_value = self._kill_existing_greenlet()
-            start_value = self.agent.vip.rpc.call(
-                self.device_actuator, "get_point", self.control_point_topic
-            ).get(timeout=RPC_TIMEOUT)
+            path, point = self.control_point_topic.rsplit("/", 1)
+            start_value = self.agent.vip.rpc.call(self.device_actuator,
+                                                  "get_point",
+                                                  path,
+                                                  point).get(timeout=RPC_TIMEOUT)
 
             steps = int(abs((start_value - target_value) / self.increment_value))
             sign = 1 if start_value >= target_value else -1
@@ -907,19 +914,19 @@ class RampControlSetting(ControlSetting):
                     action_label, steps, sign, start_value
                 )
             if release and self.finalize_release_with_revert:
-                result = self.agent.vip.rpc.call(
-                    self.device_actuator,
-                    "revert_point",
-                    self.point,
-                ).get(timeout=RPC_TIMEOUT)
-                _log.debug("Reverted point: %s — Result: %s", self.point, result)
+                path, point = self.point.rsplit("/", 1)
+                final = self.agent.vip.rpc.call(self.device_actuator,
+                                                "revert_point",
+                                                path,
+                                                point).get(timeout=RPC_TIMEOUT)
+                _log.debug("##### Reverted point: {} - Result: {}".format(self.point, final))
             elif final != target_value:
-                self.agent.vip.rpc.call(
-                    self.device_actuator,
-                    "set_point",
-                    self.control_point_topic,
-                    target_value,
-                ).get(timeout=RPC_TIMEOUT)
+                path, point = self.control_point_topic.rsplit("/", 1)
+                final = self.agent.vip.rpc.call(self.device_actuator,
+                                                "set_point",
+                                                path,
+                                                point,
+                                                target_value).get(timeout=RPC_TIMEOUT)
         except (Exception, gevent.Timeout) as exc:
             _log.warning("Exception in ramp %s: %s", action_label, exc)
         return final
@@ -953,12 +960,12 @@ class RampControlSetting(ControlSetting):
                 current_value,
             )
             try:
-                self.agent.vip.rpc.call(
-                    self.device_actuator,
-                    "set_point",
-                    self.control_point_topic,
-                    current_value,
-                ).get(timeout=RPC_TIMEOUT)
+                path, point = self.control_point_topic.rsplit("/", 1)
+                self.agent.vip.rpc.call(self.device_actuator,
+                                        "set_point",
+                                        path,
+                                        point,
+                                        current_value).get(timeout=RPC_TIMEOUT)
                 topic = "/".join([prefix, self.control_point_topic, action_label])
                 message = {"Value": current_value, "PreviousValue": previous_value}
                 self.agent.publish_record(topic, message)
