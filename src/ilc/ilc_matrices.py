@@ -5,7 +5,7 @@
 #
 # ===----------------------------------------------------------------------===
 #
-# Copyright 2022 Battelle Memorial Institute
+# Copyright 2026 Battelle Memorial Institute
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
 # use this file except in compliance with the License. You may obtain a copy
@@ -115,56 +115,137 @@ def normalize_matrix(criteria_matrix, col_sums):
 
 def validate_input(pairwise_matrix, col_sums):
     """
-    Validates the criteria matrix to ensure that the inputs are
+    Validates AHP pairwise comparison matrices using the consistency ratio.
 
-    internally consistent. Returns a True if the matrix is valid,
-    and False if it is not.
-    :param pairwise_matrix:
-    :param col_sums:
-    :return:
+    pairwise_matrix format:
+        {
+            "state1": [
+                [1,   3,   5],
+                [1/3, 1,   2],
+                [1/5, 1/2, 1]
+            ]
+        }
+
+    col_sums is still accepted as input, but the consistency calculation
+    uses the full pairwise matrix because that is more reliable.
+
+    Returns:
+        True if all matrices are consistent enough, otherwise False.
     """
-    # Calculate row products and take the 5th root
+
     _log.info("Validating matrix")
+
+    random_index = {
+        1: 0.00,
+        2: 0.00,
+        3: 0.58,
+        4: 0.90,
+        5: 1.12,
+        6: 1.24,
+        7: 1.32,
+        8: 1.41,
+        9: 1.45,
+        10: 1.49,
+    }
+
     consistent = True
+
     for state in pairwise_matrix:
-        random_index = [0, 0, 0, 0.58, 0.9, 1.12, 1.24, 1.32, 1.41, 1.45, 1.49]
+        matrix = pairwise_matrix[state]
+        n = len(matrix)
+
+        if n == 0:
+            raise ValueError(f"{state}: matrix is empty")
+
+        if state not in col_sums:
+            raise ValueError(f"{state}: missing column sums")
+
+        if len(col_sums[state]) != n:
+            raise ValueError(
+                f"{state}: col_sums length does not match matrix size"
+            )
+
+        if n not in random_index:
+            raise ValueError(
+                f"{state}: random index not available for matrix size {n}"
+            )
+
+        # Validate square matrix and positive values
+        for row in matrix:
+            if len(row) != n:
+                raise ValueError(f"{state}: matrix must be square")
+
+            for value in row:
+                if value <= 0:
+                    raise ValueError(
+                        f"{state}: AHP pairwise comparison values must be positive"
+                    )
+
+        # 1x1 and 2x2 reciprocal AHP matrices are always consistent
+        if n <= 2:
+            consistency_index = 0.0
+            consistency_ratio = 0.0
+
+            _log.debug(
+                "Pairwise comparison: {} - CI: {} - CR: {}".format(
+                    state, consistency_index, consistency_ratio
+                )
+            )
+
+            continue
+
+        # Calculate row geometric means.
+        # Original code used 1.0 / 5, which is only correct for 5x5 matrices.
         roots = []
-        for row in pairwise_matrix[state]:
-            roots.append(math.pow(reduce(operator.mul, row, 1), 1.0/5))
-        # Sum the vector of products
+        for row in matrix:
+            row_product = reduce(operator.mul, row, 1)
+            roots.append(math.pow(row_product, 1.0 / n))
+
+        # Normalize to get priority vector
         root_sum = sum(roots)
-        # Calculate the priority vector
-        priority_vec = []
-        for item in roots:
-            priority_vec.append(item / root_sum)
+        priority_vec = [item / root_sum for item in roots]
 
-        # Calculate the priority row
-        priority_row = []
-        for i in range(0, len(col_sums[state])):
-            priority_row.append(col_sums[state][i] * priority_vec[i])
+        # Calculate A * w
+        weighted_sum_vec = []
+        for i in range(n):
+            weighted_sum = 0.0
+            for j in range(n):
+                weighted_sum += matrix[i][j] * priority_vec[j]
+            weighted_sum_vec.append(weighted_sum)
 
-        # Sum the priority row
-        priority_row_sum = sum(priority_row)
+        # Calculate lambda values: (A*w)_i / w_i
+        lambda_values = []
+        for i in range(n):
+            lambda_values.append(weighted_sum_vec[i] / priority_vec[i])
 
-        # Calculate the consistency index
-        ncols = max(len(col_sums[state]) - 1, 1)
-        consistency_index = \
-            (priority_row_sum - len(col_sums[state]))/ncols
+        # Average lambda values to estimate lambda_max
+        lambda_max = sum(lambda_values) / n
 
-        # Calculate the consistency ratio
-        if len(col_sums[state]) < 4:
-            consistency_ratio = consistency_index
-        else:
-            rindex = random_index[len(col_sums[state])]
-            consistency_ratio = consistency_index / rindex
+        # Calculate consistency index
+        consistency_index = (lambda_max - n) / (n - 1)
 
-        _log.debug("Pairwise comparison: {} - CR: {}".format(state, consistency_index))
+        # Avoid tiny negative values caused by floating point precision
+        if consistency_index < 0 and abs(consistency_index) < 1e-12:
+            consistency_index = 0.0
+
+        # Calculate consistency ratio
+        consistency_ratio = consistency_index / random_index[n]
+
+        _log.debug(
+            "Pairwise comparison: {} - lambda_max: {} - CI: {} - CR: {}".format(
+                state, lambda_max, consistency_index, consistency_ratio
+            )
+        )
+
         if consistency_ratio > 0.2:
             consistent = False
-            _log.debug("Inconsistent pairwise comparison: {} - CR: {}".format(state, consistency_ratio))
+            _log.debug(
+                "Inconsistent pairwise comparison: {} - CR: {}".format(
+                    state, consistency_ratio
+                )
+            )
 
     return consistent
-
 
 def build_score(_matrix, weight, priority):
     """
