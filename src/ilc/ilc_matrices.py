@@ -113,10 +113,6 @@ def normalize_matrix(criteria_matrix, col_sums):
     return row_sums
 
 
-import math
-import operator
-from functools import reduce
-
 def validate_input(pairwise_matrix, col_sums):
     """
     Validates AHP pairwise comparison matrices using the consistency ratio.
