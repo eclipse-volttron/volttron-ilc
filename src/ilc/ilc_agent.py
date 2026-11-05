@@ -101,6 +101,7 @@ _log = logging.getLogger(__name__)
 APP_CATEGORY = "LOAD CONTROL"
 APP_NAME = "ILC"
 DEFAULT_ACTUATOR = "platform.driver"
+DEFAULT_SIM_ADVANCE_TOPIC = "applications/ilc/advance"
 DEFAULT_TIMEZONE = "US/Pacific"
 PUBSUB_PEER = "pubsub"
 
@@ -250,6 +251,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "stagger_release": True,
     "stagger_off_time": True,
     "simulation_running": False,
+    "sim_advance_topic": DEFAULT_SIM_ADVANCE_TOPIC,
     "confirm_time": 5,
     "clusters": [],
 }
@@ -429,6 +431,7 @@ class ILCAgent(Agent):
         self.kill_pt: Optional[str] = None
         self.lock: bool = False
         self.sim_running: bool = False
+        self.sim_advance_topic: str = DEFAULT_SIM_ADVANCE_TOPIC
         self.sim_time: int = 0
         self.config_reload_needed: bool = False
         self.saved_config: Optional[Dict[str, Any]] = None
@@ -548,6 +551,7 @@ class ILCAgent(Agent):
         )
         self.demand_threshold = config.get("demand_threshold", self.demand_threshold)
         self.sim_running = config.get("simulation_running", self.sim_running)
+        self.sim_advance_topic = config.get("sim_advance_topic", self.sim_advance_topic)
 
         self.starting_base("core")
         self.config_reload_needed = False
@@ -1252,10 +1256,10 @@ class ILCAgent(Agent):
         self._publish_power_data(average_power, average_time)
 
         if self.sim_running:
-            gevent.sleep(0.1)
+            gevent.sleep(0.01)
             self.vip.pubsub.publish(
                 PUBSUB_PEER,
-                "applications/ilc/advance",
+                self.sim_advance_topic,
                 headers={},
                 message={},
             )
