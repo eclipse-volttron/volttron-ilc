@@ -70,6 +70,25 @@ View the status of the installed agent
 vctl status
 ```
 
+### Command-line tools
+
+Installing the agent on the modular platform also installs a `vctl` plugin. `vctl ilc target` publishes a demand
+target to the agent:
+
+```shell
+vctl ilc target 150 --start 2026-11-05T14:00:00 --end 2026-11-05T16:00:00
+```
+
+The Monolithic platform's `vctl` has no plugin mechanism, so the same commands are provided there by a standalone
+`vilc` script (`vilc ilc target ...`). `vctl install` does not place it on the path; install it once from this
+directory with the platform's virtual environment active:
+
+```shell
+python setup_vilc.py develop
+```
+
+Both share `vctl`'s control connection identity, so do not run them while another `vctl` command is in progress.
+
 ## Development
 
 Please see the following for contributing guidelines [contributing](https://github.com/eclipse-volttron/volttron-core/blob/develop/CONTRIBUTING.md).

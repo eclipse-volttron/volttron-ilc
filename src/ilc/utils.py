@@ -5,7 +5,7 @@
 #
 # ===----------------------------------------------------------------------===
 #
-# Copyright 2022 Battelle Memorial Institute
+# Copyright 2026 Battelle Memorial Institute
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
 # use this file except in compliance with the License. You may obtain a copy
@@ -82,7 +82,7 @@ def sympy_evaluate(condition: str, points: Union[List[Tuple[str, float]], ItemsV
         return float(return_value)
 
 
-def parse_sympy(data: List[str]) -> str:
+def parse_sympy(data: List[str]|str) -> str:
     """
     Creates conditional from list of conditional components.
 
