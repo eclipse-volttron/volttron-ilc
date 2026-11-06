@@ -26,7 +26,7 @@ readme = "README.md"
 repository = "https://github.com/eclipse-volttron/volttron-ilc"
 homepage = "https://github.com/eclipse-volttron/volttron-ilc"
 keywords = []
-packages = [ { include = "ilc", from = "src" } ]
+packages = [ { include = "ilc", from = "src" }, { include = "volttron", from = "src" } ]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Intended Audience :: Science/Research",
@@ -61,6 +61,7 @@ sphinx-rtd-theme = "^1.0.0"
 
 [tool.poetry.scripts]
 volttron-ilc = "ilc.ilc_agent:main"
+vilc = "volttron.plugins.vctl.ilc.parser:main"
 
 [tool.yapf]
 based_on_style = "pep8"
