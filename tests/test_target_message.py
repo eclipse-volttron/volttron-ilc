@@ -1,4 +1,4 @@
-"""Unit tests for the ILC target message builder and the ``vctl ilc`` / ``vilc`` command parser."""
+"""Unit tests for the ILC target message builder and the ``vctl ilc`` plugin."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -44,19 +44,6 @@ def test_agent_side_parse_matches():
 def test_target_topic():
     assert target_topic() == f'{DEFAULT_PREFIX}/target_agent'
     assert target_topic('analysis') == 'analysis/target_agent'
-
-
-def test_vilc_target_publishes_through_connection(monkeypatch):
-    fake = MagicMock()
-    monkeypatch.setattr(ilc_cli, 'connection', lambda opts=None: fake)
-    rc = ilc_cli.main(['ilc', 'target', '120', '--start', '2026-11-05T14:00:00', '--target-id', 't1',
-                       '--prefix', 'analysis', '--timeout', '5'])
-    assert rc == 0
-    fake.server.vip.pubsub.publish.assert_called_once()
-    args, kwargs = fake.server.vip.pubsub.publish.call_args
-    assert args == ('pubsub', 'analysis/target_agent')
-    assert kwargs['message'][0]['value'] == {'start': '2026-11-05T14:00:00', 'target': 120.0, 'id': 't1'}
-    fake.server.vip.pubsub.publish.return_value.get.assert_called_once_with(timeout=5)
 
 
 def test_ilc_target_under_vctl_reuses_vctl_connection():

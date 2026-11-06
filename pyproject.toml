@@ -61,7 +61,6 @@ sphinx-rtd-theme = "^1.0.0"
 
 [tool.poetry.scripts]
 volttron-ilc = "ilc.ilc_agent:main"
-vilc = "volttron.plugins.vctl.ilc.parser:main"
 
 [tool.yapf]
 based_on_style = "pep8"
